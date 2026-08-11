@@ -1001,7 +1001,7 @@ function SaveMutedWords()
             if(Class'WSZoundClient'.default.ZoundServer[i].ServerID == MyServerID)
             {
                 Class'WSZoundClient'.default.ZoundServer[i].MutedWords = sTemp;
-                Class'WSZoundClient'.static.StaticSaveConfig();
+                Class'WSZoundClient'.static.SaveZoundConfig();
                 return;
             }
         }
@@ -1013,7 +1013,7 @@ function SaveMutedWords()
     Class'WSZoundClient'.default.ZoundServer.Length = j + 1;
     Class'WSZoundClient'.default.ZoundServer[j].ServerID = MyServerID;
     Class'WSZoundClient'.default.ZoundServer[j].MutedWords = sTemp;
-    Class'WSZoundClient'.static.StaticSaveConfig();
+    Class'WSZoundClient'.static.SaveZoundConfig();
 }
 
 function LoadFavorWords()
@@ -1063,7 +1063,7 @@ function SaveFavorWords()
             if(Class'WSZoundClient'.default.ZoundServer[i].ServerID == MyServerID)
             {
                 Class'WSZoundClient'.default.ZoundServer[i].Favourites = sTemp;
-                Class'WSZoundClient'.static.StaticSaveConfig();
+                Class'WSZoundClient'.static.SaveZoundConfig();
                 return;
             }
         }
@@ -1075,7 +1075,7 @@ function SaveFavorWords()
     Class'WSZoundClient'.default.ZoundServer.Length = j + 1;
     Class'WSZoundClient'.default.ZoundServer[j].ServerID = MyServerID;
     Class'WSZoundClient'.default.ZoundServer[j].Favourites = sTemp;
-    Class'WSZoundClient'.static.StaticSaveConfig();
+    Class'WSZoundClient'.static.SaveZoundConfig();
 }
 
 function bool OnClickAdmin(GUIComponent Sender)
@@ -1235,7 +1235,7 @@ function SaveClientStuff(bool bBind)
     Class'WSZoundClient'.default.ZoundVolume = MyVolume;
     Class'WSZoundClient'.default.bMuteLongZounds = MuteLenBox.IsChecked();
     Class'WSZoundClient'.default.MaxZoundSeconds = MuteLenSlider.Value;
-    Class'WSZoundClient'.static.StaticSaveConfig();
+    Class'WSZoundClient'.static.SaveZoundConfig();
     sTemp = "";
     if(bZoundCnt.IsChecked())
     {

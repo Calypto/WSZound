@@ -1,5 +1,4 @@
-class WSZoundClient extends Interaction
-    config(WSZoundClient);
+class WSZoundClient extends Interaction;
 
 struct ZCTriggers
 {
@@ -8,15 +7,19 @@ struct ZCTriggers
     var string Favourites;
 };
 
-var config bool ZoundInitial;
-var config bool ZoundEnabled;
-var config int ZoundMenuKey;
-var config int ZoundVolume;
-var config bool bMuteLongZounds;
-var config float MaxZoundSeconds;
-var config bool bMenuKeyUserSet;
+// In-memory copy only. The ini side of these lives in WSZoundSettings, which is
+// where LoadZoundConfig and SaveZoundConfig read and write them.
+var bool ZoundInitial;
+var bool ZoundEnabled;
+var int ZoundMenuKey;
+var int ZoundVolume;
+var bool bMuteLongZounds;
+var float MaxZoundSeconds;
+var bool bMenuKeyUserSet;
 var string KeyBind[125];
-var() config array<ZCTriggers> ZoundServer;
+var() array<ZCTriggers> ZoundServer;
+
+var WSZoundSettings Settings;
 var() string MyServerID;
 var string MesgLogon;
 var string MesgBind;
@@ -28,16 +31,70 @@ var float MyTime;
 var string StockEndBind;
 var string MenuCmd;
 
+// The settings object is created with a fixed name, so it always maps to the
+// same ini section no matter what the package is called. Held on the class
+// default so every caller shares the one instance.
+static function WSZoundSettings GetSettings()
+{
+    if(default.Settings == none)
+    {
+        default.Settings = new(none, "WSZoundClient") class'WSZoundSettings';
+    }
+    return default.Settings;
+}
+
+static function LoadZoundConfig()
+{
+    local WSZoundSettings S;
+    local int i;
+
+    S = GetSettings();
+    default.ZoundInitial = S.ZoundInitial;
+    default.ZoundEnabled = S.ZoundEnabled;
+    default.ZoundMenuKey = S.ZoundMenuKey;
+    default.ZoundVolume = S.ZoundVolume;
+    default.bMuteLongZounds = S.bMuteLongZounds;
+    default.MaxZoundSeconds = S.MaxZoundSeconds;
+    default.bMenuKeyUserSet = S.bMenuKeyUserSet;
+    default.ZoundServer.Length = S.ZoundServer.Length;
+    for(i = 0; i < S.ZoundServer.Length; i++)
+    {
+        default.ZoundServer[i] = S.ZoundServer[i];
+    }
+}
+
+static function SaveZoundConfig()
+{
+    local WSZoundSettings S;
+    local int i;
+
+    S = GetSettings();
+    S.ZoundInitial = default.ZoundInitial;
+    S.ZoundEnabled = default.ZoundEnabled;
+    S.ZoundMenuKey = default.ZoundMenuKey;
+    S.ZoundVolume = default.ZoundVolume;
+    S.bMuteLongZounds = default.bMuteLongZounds;
+    S.MaxZoundSeconds = default.MaxZoundSeconds;
+    S.bMenuKeyUserSet = default.bMenuKeyUserSet;
+    S.ZoundServer.Length = default.ZoundServer.Length;
+    for(i = 0; i < default.ZoundServer.Length; i++)
+    {
+        S.ZoundServer[i] = default.ZoundServer[i];
+    }
+    S.SaveConfig();
+}
+
 function Initialized()
 {
-    if(!ZoundInitial)
+    LoadZoundConfig();
+    if(!default.ZoundInitial)
     {
         default.ZoundInitial = true;
         default.ZoundEnabled = true;
         default.ZoundMenuKey = 35;
         default.ZoundVolume = 80;
         default.MaxZoundSeconds = 10.0000000;
-        self.StaticSaveConfig();
+        SaveZoundConfig();
     }
     SetKeyBindList();
     MesgLogon = "- This server uses Zound -";
