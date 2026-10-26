@@ -29,20 +29,24 @@ var bool bLoadRepln;
 var bool bStartup;
 var int CurrentID;
 var int MySeconds;
-var int ZPlayers;
 var int NumTrigsA;
 var int NumTrigsB;
-var PlayerController ZoundController[51];
-var string ZoundPlayerName[51];
-var string ZoundPlayerHash[51];
-var string ZoundPlayerMute[51];
-var string ZoundPlayerShut[51];
-var int ZoundPlayerKill[51];
-var int ZoundPlayerGain[51];
-var int ZoundPlayerLogID[51];
-var int ZoundPlayerSound[51];
-var int ZoundPlayerDelay[51];
-var int ZoundPlayerTimer[51];
+// Per-player slots, one per distinct player this map (kept after they leave, so a
+// returning player gets theirs back by name). Slots [0, NumZoundSlots) are in use, and
+// every loop over the slots stops there, so the cap itself costs nothing.
+const MAXZOUNDPLAYERS = 256;
+var int NumZoundSlots;
+var PlayerController ZoundController[MAXZOUNDPLAYERS];
+var string ZoundPlayerName[MAXZOUNDPLAYERS];
+var string ZoundPlayerHash[MAXZOUNDPLAYERS];
+var string ZoundPlayerMute[MAXZOUNDPLAYERS];
+var string ZoundPlayerShut[MAXZOUNDPLAYERS];
+var int ZoundPlayerKill[MAXZOUNDPLAYERS];
+var int ZoundPlayerGain[MAXZOUNDPLAYERS];
+var int ZoundPlayerLogID[MAXZOUNDPLAYERS];
+var int ZoundPlayerSound[MAXZOUNDPLAYERS];
+var int ZoundPlayerDelay[MAXZOUNDPLAYERS];
+var int ZoundPlayerTimer[MAXZOUNDPLAYERS];
 var string ZoundAdmin[51];
 var string ZLastPlayers;
 var string MySoundA[251];
@@ -291,11 +295,6 @@ event Tick(float DeltaTime)
     local Controller C;
 
     super(Actor).Tick(DeltaTime);
-    if(Level.Game.NumPlayers != ZPlayers)
-    {
-        ZPlayers = Level.Game.NumPlayers;
-        LoadRepPlayers();
-    }
     if(Level.Game.CurrentID > CurrentID)
     {
         for(C = Level.ControllerList; C != none; C = C.nextController)
@@ -326,39 +325,24 @@ event Tick(float DeltaTime)
     }
 }
 
-function LoadRepPlayers()
-{
-    local Controller C;
-    local int X;
-
-    for(X = 0; X < 32; X++)
-    {
-        ZRI.Players[X] = "";
-    }
-    X = 0;
-    for(C = Level.ControllerList; C != none; C = C.nextController)
-    {
-        if((C.IsA('PlayerController') && MessagingSpectator(C) == none) && C.PlayerReplicationInfo.PlayerName != "WebAdmin")
-        {
-            if(!C.PlayerReplicationInfo.bOnlySpectator && C.PlayerReplicationInfo.PlayerName != "DemoRecSpectator")
-            {
-                ZRI.Players[X] = C.PlayerReplicationInfo.PlayerName;
-                X++;
-            }
-        }
-    }
-    ZRI.Dummy++;
-}
-
-// Index of PC's Zound player slot, matched by name as the slot arrays always have been,
-// or -1 when the player has no slot.
+// Index of PC's Zound player slot, or -1 when the player has no slot. Logged-on players
+// are matched by controller: a pointer compare with no string copies, which also keeps
+// a renamed player on their slot (by name alone they lost it and heard zounds at volume
+// 0). The name match covers players before their logon message and returning players.
 final function int FindPlayerSlot(PlayerController PC)
 {
     local string sNick;
     local int i;
 
+    for(i = 0; i < NumZoundSlots; i++)
+    {
+        if(ZoundController[i] == PC)
+        {
+            return i;
+        }
+    }
     sNick = PC.PlayerReplicationInfo.PlayerName;
-    for(i = 0; i < 50; i++)
+    for(i = 0; i < NumZoundSlots; i++)
     {
         if(ZoundPlayerName[i] == sNick)
         {
@@ -401,39 +385,35 @@ function bool CheckForNoZound(PlayerController PC)
 
 function SetupMuted(PlayerController PC, string sMute, bool bPlayer)
 {
-    local string sTemp, sNick;
+    local string sTemp;
     local int i;
 
     if(PC == none)
     {
         return;
     }
-    sNick = PC.PlayerReplicationInfo.PlayerName;
-    sTemp = "";
-    for(i = 0; i < 50; i++)
+    i = FindPlayerSlot(PC);
+    if(i == -1)
     {
-        if(ZoundPlayerName[i] == sNick)
+        return;
+    }
+    if(bPlayer)
+    {
+        if(sMute == "None")
         {
-            if(bPlayer)
-            {
-                if(sMute == "None")
-                {
-                    sMute = "";
-                }
-                ZoundPlayerShut[i] = sMute;
-                return;
-            }
-            if(sMute != "")
-            {
-                sTemp = Mid(sMute, Len(sMute) - 1);
-                if(sTemp != ",")
-                {
-                    sMute = sMute $ ",";
-                }
-                ZoundPlayerMute[i] = sMute;
-                return;
-            }
+            sMute = "";
         }
+        ZoundPlayerShut[i] = sMute;
+        return;
+    }
+    if(sMute != "")
+    {
+        sTemp = Mid(sMute, Len(sMute) - 1);
+        if(sTemp != ",")
+        {
+            sMute = sMute $ ",";
+        }
+        ZoundPlayerMute[i] = sMute;
     }
 }
 
@@ -493,6 +473,27 @@ function WSZoundSpawn GetZoundSpawn(PlayerController PC)
     return none;
 }
 
+// Fallback for a departed player's spawn when NotifyLogout didn't reach this mutator (a
+// mutator ahead of it may not pass the call on). PLC reads none once the engine has
+// cleared its references to the destroyed controller; that was the old per-tick check.
+final function SweepZoundSpawns()
+{
+    local int i;
+
+    for(i = ZoundSpawns.Length - 1; i >= 0; i--)
+    {
+        if(ZoundSpawns[i] == none)
+        {
+            ZoundSpawns.Remove(i, 1);
+        }
+        else if(ZoundSpawns[i].PLC == none)
+        {
+            // Destroyed takes it out of the list.
+            ZoundSpawns[i].Destroy();
+        }
+    }
+}
+
 // Called from WSZoundSpawn.Destroyed so ZoundSpawns never holds a destroyed actor.
 function RemoveZoundSpawn(WSZoundSpawn ZS)
 {
@@ -547,6 +548,7 @@ function Timer()
     local int i, j;
 
     super(Actor).Timer();
+    SweepZoundSpawns();
     MySeconds++;
     if((MySeconds >= 3) && bLoadRepln)
     {
@@ -569,7 +571,7 @@ function Timer()
             PFromBuff[i] = PFromBuff[i + 1];
         }
     }
-    for(i = 0; i < 50; i++)
+    for(i = 0; i < NumZoundSlots; i++)
     {
         if(ZoundPlayerDelay[i] > 0)
         {
@@ -907,24 +909,21 @@ function OpenZoundMenu(PlayerController Sender)
     }
     Param1 = (((Param1 $ string(NumTrigsA)) $ ",") $ string(NumTrigsB)) $ ",";
     S = 9999;
-    for(i = 0; i < 50; i++)
+    i = FindPlayerSlot(Sender);
+    if(i != -1)
     {
-        if(ZoundPlayerName[i] == sNick)
+        MPlayer = ZoundPlayerShut[i];
+        if(MPlayer == "")
         {
-            MPlayer = ZoundPlayerShut[i];
-            if(MPlayer == "")
-            {
-                MPlayer = "None";
-            }
-            if(!bAdmin && SoundsEach != 0)
-            {
-                S = SoundsEach - ZoundPlayerSound[i];
-            }
-            if(S < 0)
-            {
-                S = 0;
-            }
-            break;
+            MPlayer = "None";
+        }
+        if(!bAdmin && SoundsEach != 0)
+        {
+            S = SoundsEach - ZoundPlayerSound[i];
+        }
+        if(S < 0)
+        {
+            S = 0;
         }
     }
     Param2 = ((MPlayer $ ",") $ string(S)) $ ",";
@@ -1306,56 +1305,55 @@ function CheckZoundPlayer(PlayerController Sender, string sMesg, optional bool b
     i = InStr(sMesg, ",");
     iVol = int(Left(sMesg, i));
     sMesg = Mid(sMesg, i + 1);
-    for(i = 0; i < 50; i++)
+    i = FindPlayerSlot(Sender);
+    if(i != -1)
     {
-        if(ZoundPlayerName[i] == sNick)
+        if(bMutate)
         {
-            if(bMutate)
+            k = ZoundPlayerKill[i];
+            k = k + 1;
+            if(k > 1)
             {
-                k = ZoundPlayerKill[i];
-                k = k + 1;
-                if(k > 1)
-                {
-                    k = 0;
-                }
-                ZoundPlayerKill[i] = k;
-                if(k == 0)
-                {
-                    Sender.ClientMessage("< Your Zound is disabled on this level >");                    
-                }
-                else
-                {
-                    Sender.ClientMessage("< Your Zound is enabled on this level >");
-                }
-                return;
+                k = 0;
             }
-            ZoundPlayerKill[i] = iZnd;
-            ZoundPlayerGain[i] = iVol;
-            ZoundController[i] = Sender;
-            ZoundPlayerHash[i] = Sender.GetPlayerIDHash();
-            ZoundPlayerLogID[i] = Sender.PlayerReplicationInfo.PlayerID;
+            ZoundPlayerKill[i] = k;
+            if(k == 0)
+            {
+                Sender.ClientMessage("< Your Zound is disabled on this level >");
+            }
+            else
+            {
+                Sender.ClientMessage("< Your Zound is enabled on this level >");
+            }
             return;
         }
+        // Found by controller after a rename: the slot takes the new name.
+        ZoundPlayerName[i] = sNick;
+        ZoundPlayerKill[i] = iZnd;
+        ZoundPlayerGain[i] = iVol;
+        ZoundController[i] = Sender;
+        ZoundPlayerHash[i] = Sender.GetPlayerIDHash();
+        ZoundPlayerLogID[i] = Sender.PlayerReplicationInfo.PlayerID;
+        return;
     }
     if(bMutate)
     {
         return;
     }
-    for(i = 0; i < 50; i++)
+    // New player: the next unused slot. Slots aren't reused within a map.
+    if(NumZoundSlots < MAXZOUNDPLAYERS)
     {
-        if(ZoundPlayerName[i] == "")
-        {
-            ZoundPlayerName[i] = sNick;
-            ZoundPlayerKill[i] = iZnd;
-            ZoundPlayerGain[i] = iVol;
-            ZoundController[i] = Sender;
-            ZoundPlayerHash[i] = Sender.GetPlayerIDHash();
-            ZoundPlayerLogID[i] = Sender.PlayerReplicationInfo.PlayerID;
-            ZoundPlayerTimer[i] = LoginDelay;
-            ZoundPlayerSound[i] = 0;
-            ZoundPlayerDelay[i] = 0;
-            break;
-        }
+        i = NumZoundSlots;
+        NumZoundSlots++;
+        ZoundPlayerName[i] = sNick;
+        ZoundPlayerKill[i] = iZnd;
+        ZoundPlayerGain[i] = iVol;
+        ZoundController[i] = Sender;
+        ZoundPlayerHash[i] = Sender.GetPlayerIDHash();
+        ZoundPlayerLogID[i] = Sender.PlayerReplicationInfo.PlayerID;
+        ZoundPlayerTimer[i] = LoginDelay;
+        ZoundPlayerSound[i] = 0;
+        ZoundPlayerDelay[i] = 0;
     }
     if(Len(sMesg) > 3)
     {
@@ -1377,6 +1375,8 @@ function NotifyLogout(Controller Exiting)
 {
     local string sTemp;
     local Sound MySound;
+    local WSZoundSpawn ZS;
+    local int i;
 
     if((bAnnounce && !Level.Game.bGameEnded) && !Exiting.PlayerReplicationInfo.bBot)
     {
@@ -1385,6 +1385,24 @@ function NotifyLogout(Controller Exiting)
         if(MySound != none)
         {
             AddToSoundBuff(MySound, 3, sTemp, "");
+        }
+    }
+    // The player's spawn only goes when they leave: it has to outlive respawns and the end
+    // of the match, because zounds keep playing then and PlayZoundTo would otherwise play
+    // them unmuted. Destroyed takes it out of ZoundSpawns.
+    ZS = GetZoundSpawn(PlayerController(Exiting));
+    if(ZS != none)
+    {
+        ZS.Destroy();
+    }
+    // Their slot stays (found by name if they come back), minus the controller and any
+    // join announcement still pending.
+    for(i = 0; i < NumZoundSlots; i++)
+    {
+        if(ZoundController[i] == Exiting)
+        {
+            ZoundController[i] = none;
+            ZoundPlayerTimer[i] = 0;
         }
     }
     if(NextMutator != none)
@@ -1723,7 +1741,7 @@ function string ChatHandler(Controller Who, string Cmd, Controller ToWho)
         }
         if(MySound != none)
         {
-            for(i = 0; i < 50; i++)
+            for(i = 0; i < NumZoundSlots; i++)
             {
                 if(((!IsAdmin && bHashID) && ZoundPlayerHash[i] == sTemp) || !bHashID && string(ZoundPlayerLogID[i]) == sTemp)
                 {

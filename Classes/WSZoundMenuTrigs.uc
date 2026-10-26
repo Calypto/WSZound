@@ -1328,9 +1328,13 @@ function LoadClientStuff()
     ChatLine.SetText("");
 }
 
+// Human players who aren't only spectating, read from the player info every client
+// already has. The server used to rebuild and re-send this list on every join/leave.
 function SetPlayerList()
 {
-    local string sTemp;
+    local GameReplicationInfo GRI;
+    local PlayerReplicationInfo PRI;
+    local string sTemp, sSelf;
     local int i;
 
     PlayerList.List.Clear();
@@ -1339,16 +1343,25 @@ function SetPlayerList()
     {
         PlayerList.List.Add("None");
     }
-    for(i = 0; i < 32; i++)
+    GRI = PlayerOwner().GameReplicationInfo;
+    if(GRI != none)
     {
-        sTemp = ZRI.Players[i];
-        if(sTemp == "")
+        sSelf = PlayerOwner().PlayerReplicationInfo.PlayerName;
+        for(i = 0; i < GRI.PRIArray.Length; i++)
         {
-            break;
-        }
-        if(((sTemp != MyPlayer) && sTemp != PlayerOwner().PlayerReplicationInfo.PlayerName) && sTemp != "None")
-        {
-            PlayerList.List.Add(sTemp);
+            PRI = GRI.PRIArray[i];
+            if(((PRI == none) || PRI.bBot) || PRI.bOnlySpectator)
+            {
+                continue;
+            }
+            sTemp = PRI.PlayerName;
+            if((((sTemp != "") && sTemp != "WebAdmin") && sTemp != "DemoRecSpectator") && sTemp != "None")
+            {
+                if((sTemp != MyPlayer) && sTemp != sSelf)
+                {
+                    PlayerList.List.Add(sTemp);
+                }
+            }
         }
     }
     PlayerList.List.SetIndex(0);

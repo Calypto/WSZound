@@ -92,24 +92,29 @@ function Destroyed()
     super.Destroyed();
 }
 
+// Server only (not simulated). A dedicated server has nothing to tick: MutWSZound
+// destroys this actor when its player leaves (NotifyLogout, plus a once-a-second sweep).
+// Not PostBeginPlay: SetInitialState runs after it, and its GotoState re-enables Tick.
+function PostNetBeginPlay()
+{
+    super.PostNetBeginPlay();
+    if(Level.NetMode == NM_DedicatedServer)
+    {
+        Disable('Tick');
+    }
+}
+
+// Client setup: install the interaction, then stop ticking once it's done or given up.
 simulated function Tick(float DeltaTime)
 {
-    if(Level.NetMode != NM_DedicatedServer)
+    if(!bInfoDone && Trys < 20)
     {
-        if(!bInfoDone && Trys < 20)
-        {
-            Trys++;
-            SetInteraction();
-        }
-        return;
+        Trys++;
+        SetInteraction();
     }
-    // Keep the actor alive across respawns and past the end of the match so it
-    // can still receive ClientPlayZound. Zounds keep playing while bGameEnded is
-    // set, and with this actor gone MutWSZound.PlayZoundTo falls back to playing
-    // them unmuted. Only tear it down once the player has left.
-    if(PLC == none)
+    if(bInfoDone || Trys >= 20)
     {
-        Destroy();
+        Disable('Tick');
     }
 }
 
