@@ -887,7 +887,7 @@ function OpenZoundMenu(PlayerController Sender)
         }
     }
     Param2 = ((MPlayer $ ",") $ string(S)) $ ",";
-    Sender.ClientOpenMenu("WSZound.WSZoundMenuTrigs", false, Param1, Param2);
+    Sender.ClientOpenMenu(string(Class'WSZoundMenuTrigs'), false, Param1, Param2);
 }
 
 function OpenAdminMenu(PlayerController Sender)
@@ -1015,7 +1015,7 @@ function OpenAdminMenu(PlayerController Sender)
             }
         }
     }
-    Sender.ClientOpenMenu("WSZound.WSZoundMenuAdmin", false, Param1, Param2);
+    Sender.ClientOpenMenu(string(Class'WSZoundMenuAdmin'), false, Param1, Param2);
 }
 
 function AdminSubmit(PlayerController Sender, string Options)
@@ -1493,39 +1493,27 @@ function GetPlayerTrigs(PlayerController Sender)
             break;
         }
     }
-    Sender.ClientOpenMenu("WSZound.WSZoundMenuHist", false, Param1, Param2);
+    Sender.ClientOpenMenu(string(Class'WSZoundMenuHist'), false, Param1, Param2);
 }
 
+// Drops up to 49 leading spaces, then collapses every run of spaces into one.
 function string CheckOutTrigger(string sTrig)
 {
-    local string sTemp;
     local int i;
 
-    sTemp = sTrig;
-    for(i = 1; i < 50; i++)
+    while((i < 49) && Mid(sTrig, i, 1) == " ")
     {
-        if(Left(sTemp, 1) == " ")
-        {
-            sTemp = Mid(sTemp, 1);
-        }
+        i++;
     }
-    i = InStr(sTemp, "  ");
-    while(i != -1)
+    if(i > 0)
     {
-        sTemp = Left(sTemp, i) $ Mid(sTemp, i + 1);
-        i = InStr(sTemp, "  ");
+        sTrig = Mid(sTrig, i);
     }
-    if((sTemp != "") && Mid(sTemp, Len(sTemp) - 1) == " ")
+    while(InStr(sTrig, "  ") != -1)
     {
-        if(Mid(sTemp, Len(sTemp)) == "")
-        {
-            if(InStr(sTemp, " ") == -1)
-            {
-                sTemp = Left(sTemp, Len(sTemp) - 1);
-            }
-        }
+        sTrig = Repl(sTrig, "  ", " ", true);
     }
-    return sTemp;
+    return sTrig;
 }
 
 function string ChatHandler(Controller Who, string Cmd, Controller ToWho)
@@ -1760,7 +1748,7 @@ function GetServerDetails(out GameInfo.ServerResponseLine ServerState)
     i = ServerState.ServerInfo.Length;
     ServerState.ServerInfo.Length = i + 1;
     ServerState.ServerInfo[i].Key = "WSZound";
-    ServerState.ServerInfo[i].Value = "V4";
+    ServerState.ServerInfo[i].Value = "V5";
 }
 
 function ServerTraveling(string URL, bool bItems)
@@ -1779,6 +1767,6 @@ defaultproperties
     Cyan=(R=0,G=160,B=255,A=255)
     bAddToServerPackages=true
     GroupName="WSZound"
-    FriendlyName="WSZound V4"
+    FriendlyName="WSZound V5"
     Description="Plays sounds triggered by chat messages"
 }

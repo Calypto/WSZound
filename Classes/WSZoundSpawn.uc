@@ -70,7 +70,7 @@ simulated function SetInteraction()
     {
         return;
     }
-    ZC = WSZoundClient(PLC.Player.InteractionMaster.AddInteraction("WSZound.WSZoundClient", PLC.Player));
+    ZC = WSZoundClient(PLC.Player.InteractionMaster.AddInteraction(string(Class'WSZoundClient'), PLC.Player));
     if(ZC == none)
     {
         return;

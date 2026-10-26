@@ -1145,7 +1145,7 @@ function bool OnClickDump(GUIComponent Sender)
         j = Len(sDump);
         if(j > 960)
         {
-            Controller.OpenMenu("WSZound.WSZoundNames", SvrID, sDump);
+            Controller.OpenMenu(string(Class'WSZoundNames'), SvrID, sDump);
             SvrID = (MyServerID $ "_") $ string(Z);
             sDump = "";
             Z++;
@@ -1154,7 +1154,7 @@ function bool OnClickDump(GUIComponent Sender)
     }
     if(j > 3)
     {
-        Controller.OpenMenu("WSZound.WSZoundNames", SvrID, sDump);
+        Controller.OpenMenu(string(Class'WSZoundNames'), SvrID, sDump);
     }
     ResetFocus();
     return true;
@@ -1409,7 +1409,7 @@ function int FindKeyBind(string sBind)
 
 function bool OnClickAbout(GUIComponent Sender)
 {
-    Controller.OpenMenu("WSZound.WSZoundMenuAbout");
+    Controller.OpenMenu(string(Class'WSZoundMenuAbout'));
     return true;
 }
 
@@ -1856,7 +1856,6 @@ defaultproperties
         ComponentJustification=TXTA_Left
         CaptionWidth=0.9000000
         Caption="Enable Zound"
-        ComponentClassName="WSZound.wsGUICheckBoxButton"
         OnCreateComponent=ZEnable.InternalOnCreateComponent
         FontScale=FNS_Small
         Hint="Enable/Disable Zound"
@@ -1899,7 +1898,6 @@ defaultproperties
         ComponentJustification=TXTA_Left
         CaptionWidth=0.9000000
         Caption="Mute Long Zounds"
-        ComponentClassName="WSZound.wsGUICheckBoxButton"
         OnCreateComponent=MuteLenChk.InternalOnCreateComponent
         FontScale=FNS_Small
         Hint="Mute zounds longer than the length below"
