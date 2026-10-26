@@ -9,6 +9,15 @@ un-source stripped version of Zound 5.5 with some enhancements
 
 ## Release notes
 
+V5
+- Exponentially better performance
+- Fix an issue with the chat filter that could hang the server if there were empty entries
+  - The last word of the filter list no longer requires a trailing comma
+
+V4
+- fix mutes not working
+- move player mutes client side
+
 V3
 - fix how client settings file is created so it doesn't have package version
 
