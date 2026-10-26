@@ -1760,7 +1760,7 @@ function GetServerDetails(out GameInfo.ServerResponseLine ServerState)
     i = ServerState.ServerInfo.Length;
     ServerState.ServerInfo.Length = i + 1;
     ServerState.ServerInfo[i].Key = "WSZound";
-    ServerState.ServerInfo[i].Value = "V2";
+    ServerState.ServerInfo[i].Value = "V4";
 }
 
 function ServerTraveling(string URL, bool bItems)
@@ -1779,6 +1779,6 @@ defaultproperties
     Cyan=(R=0,G=160,B=255,A=255)
     bAddToServerPackages=true
     GroupName="WSZound"
-    FriendlyName="WSZound V2"
+    FriendlyName="WSZound V4"
     Description="Plays sounds triggered by chat messages"
 }

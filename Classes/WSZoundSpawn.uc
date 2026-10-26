@@ -89,9 +89,11 @@ simulated function Tick(float DeltaTime)
         }
         return;
     }
-    // Keep the actor alive across respawns so it can receive ClientPlayZound;
-    // only tear it down when the match ends or the player has left.
-    if(Level.Game.bGameEnded || PLC == none)
+    // Keep the actor alive across respawns and past the end of the match so it
+    // can still receive ClientPlayZound. Zounds keep playing while bGameEnded is
+    // set, and with this actor gone MutWSZound.PlayZoundTo falls back to playing
+    // them unmuted. Only tear it down once the player has left.
+    if(PLC == none)
     {
         Destroy();
     }

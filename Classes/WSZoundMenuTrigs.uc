@@ -829,7 +829,7 @@ function bool OnClickSubMute(GUIComponent Sender)
     local int i;
 
     ResetFocus();
-    if(FavorList.List.ItemCount == 0)
+    if(MutedList.List.ItemCount == 0)
     {
         return false;
     }
@@ -911,21 +911,11 @@ function bool OnClickSave(GUIComponent Sender)
     if(bSaveMute)
     {
         bSaveMute = false;
-        sTemp = MyMutes;
-        if((sTemp != "") && Mid(sTemp, Len(sTemp) - 1) != ",")
-        {
-            sTemp = sTemp $ ",";
-        }
-        if(Len(sTemp) < 200)
-        {
-            PlayerOwner().Player.Console.DelayedConsoleCommand((("MUTATE " $ sCode) $ "ZoundClientMute-") $ sTemp);
-            SaveMutedWords();            
-        }
-        else
-        {
-            PlayerOwner().ClientMessage("< Your Mute buffer has reached its Limit >");
-            PlayerOwner().ClientPlaySound(Sound'PickupSounds.UDamagePickup');
-        }
+        // The trigger mute list is checked client side in WSZoundSpawn and is
+        // no longer uploaded to the server, so there is nothing to send and no
+        // length limit on it. Player mutes are still a server side thing and
+        // are sent below.
+        SaveMutedWords();
     }
     if(bSaveClient)
     {
