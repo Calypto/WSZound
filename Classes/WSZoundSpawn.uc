@@ -6,6 +6,8 @@ var bool bInfoDone;
 var int Dummy;
 var int Trys;
 var WSZoundClient ZC;
+// Server only (never set on clients): the mutator whose ZoundSpawns list holds this actor.
+var MutWSZound MyMut;
 
 replication
 {
@@ -33,7 +35,7 @@ simulated function bool ZoundIsMuted(string sTrig)
     {
         sMute = sMute $ ",";
     }
-    return (InStr(sMute, sTrig $ ",") != -1);
+    return (Class'WSZoundClient'.static.FindListEntry(sMute, sTrig) != -1);
 }
 
 // True when the "mute long zounds" client option is on and this sound is
@@ -76,6 +78,18 @@ simulated function SetInteraction()
         return;
     }
     bInfoDone = true;
+}
+
+// Leave the mutator's ZoundSpawns list before this actor is gone. Script can't read a
+// destroyed actor's properties without an Accessed None warning, so the list must never
+// hold one. Destroyed runs before the engine marks the actor bDeleteMe.
+function Destroyed()
+{
+    if(MyMut != none)
+    {
+        MyMut.RemoveZoundSpawn(self);
+    }
+    super.Destroyed();
 }
 
 simulated function Tick(float DeltaTime)

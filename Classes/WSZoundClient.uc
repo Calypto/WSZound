@@ -43,6 +43,14 @@ static function WSZoundSettings GetSettings()
     return default.Settings;
 }
 
+// Position of Entry in a comma-terminated list ("a,b,c,"), matched as a whole entry, or
+// -1. A plain InStr(List, Entry $ ",") also matched the tail of a longer entry, so
+// muting LEON-GOODBYE muted BYE too. The index is where the entry starts in List.
+static final function int FindListEntry(string List, string Entry)
+{
+    return InStr("," $ List, ("," $ Entry) $ ",");
+}
+
 static function LoadZoundConfig()
 {
     local WSZoundSettings S;
@@ -205,9 +213,13 @@ function Tick(float Delta)
         bMesgDone = true;
         bShowMesg = false;
     }
-    if(MyTime == float(20))
+    // Nothing is left to do after the logon and the join message, so stop the
+    // per-frame Tick and PostRender. Interactions ignore Disable('Tick'), and the old
+    // MyTime == 20 test was never exactly true. KeyEvent still runs (bActive).
+    if(bMyInit && bMesgDone)
     {
-        Disable('Tick');
+        bRequiresTick = false;
+        bVisible = false;
     }
 }
 

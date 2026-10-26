@@ -63,6 +63,11 @@ var WSZoundPlayerBan myBanList;
 var WSZoundTime myTimes;
 var WSZoundPlayers MyPlayers;
 var WSZoundReplication ZRI;
+// Every WSZoundSpawn made by SetClientClass, so GetZoundSpawn doesn't have to scan all
+// the actors in the level for each player on every zound.
+var array<WSZoundSpawn> ZoundSpawns;
+// Number of non-empty ZoundAdmin slots; CheckZoundAdmin skips its scan while it's 0.
+var int NumZoundAdmins;
 var Sound SoundBuff[55];
 var int PTypeBuff[55];
 var string PTrigBuff[55];
@@ -235,21 +240,32 @@ function ModifyPlayer(Pawn Other)
 function SetClientClass(PlayerController PC)
 {
     local WSZoundSpawn ZSRI;
+    local int i;
 
     if(PC == none)
     {
         return;
     }
-    foreach DynamicActors(Class'WSZoundSpawn', ZSRI)
+    // Replace this player's spawn. Entries leave the list in WSZoundSpawn.Destroyed, so
+    // everything here is alive; unlist before destroying so that callback finds nothing.
+    for(i = ZoundSpawns.Length - 1; i >= 0; i--)
     {
-        if(PC == ZSRI.Owner)
+        ZSRI = ZoundSpawns[i];
+        if(ZSRI == none)
         {
+            ZoundSpawns.Remove(i, 1);
+        }
+        else if(ZSRI.Owner == PC)
+        {
+            ZoundSpawns.Remove(i, 1);
             ZSRI.Destroy();
-        }        
-    }    
+        }
+    }
     ZSRI = Spawn(Class'WSZoundSpawn', PC);
     ZSRI.PLC = PC;
     ZSRI.Dummy++;
+    ZSRI.MyMut = self;
+    ZoundSpawns[ZoundSpawns.Length] = ZSRI;
     Log(((GetDateTime(true)) $ " SetClientClass for: ") $ PC.PlayerReplicationInfo.PlayerName, 'Zound');
 }
 
@@ -334,29 +350,53 @@ function LoadRepPlayers()
     ZRI.Dummy++;
 }
 
-function bool CheckForNoZound(PlayerController PC)
+// Index of PC's Zound player slot, matched by name as the slot arrays always have been,
+// or -1 when the player has no slot.
+final function int FindPlayerSlot(PlayerController PC)
 {
     local string sNick;
+    local int i;
+
+    sNick = PC.PlayerReplicationInfo.PlayerName;
+    for(i = 0; i < 50; i++)
+    {
+        if(ZoundPlayerName[i] == sNick)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Whether slot i has muted this trigger (whole list entry) or the player who sent it.
+final function bool SlotMuted(int i, string sTrig, string sWho)
+{
+    if(Class'WSZoundClient'.static.FindListEntry(ZoundPlayerMute[i], sTrig) != -1)
+    {
+        return true;
+    }
+    return (ZoundPlayerShut[i] != "") && ZoundPlayerShut[i] == sWho;
+}
+
+final function float GainToVolume(int Gn)
+{
+    if(Gn == 0)
+    {
+        return 0.0000000;
+    }
+    return 2.0000000 * (float(Gn) / float(100));
+}
+
+function bool CheckForNoZound(PlayerController PC)
+{
     local int i;
 
     if(PC == none)
     {
         return false;
     }
-    sNick = PC.PlayerReplicationInfo.PlayerName;
-    for(i = 0; i < 50; i++)
-    {
-        if(ZoundPlayerName[i] == sNick)
-        {
-            if(ZoundPlayerKill[i] == 0)
-            {
-                return true;
-                continue;
-            }
-            return false;
-        }
-    }
-    return false;
+    i = FindPlayerSlot(PC);
+    return (i != -1) && ZoundPlayerKill[i] == 0;
 }
 
 function SetupMuted(PlayerController PC, string sMute, bool bPlayer)
@@ -399,7 +439,6 @@ function SetupMuted(PlayerController PC, string sMute, bool bPlayer)
 
 function bool CheckMuted(PlayerController PC, string sTrig, string sWho)
 {
-    local string sTemp, sNick;
     local int i;
 
     if(PC == none)
@@ -410,65 +449,63 @@ function bool CheckMuted(PlayerController PC, string sTrig, string sWho)
     {
         return false;
     }
-    sNick = PC.PlayerReplicationInfo.PlayerName;
-    for(i = 0; i < 50; i++)
-    {
-        if(ZoundPlayerName[i] == sNick)
-        {
-            sTemp = ZoundPlayerMute[i];
-            if(InStr(sTemp, sTrig $ ",") != -1)
-            {
-                return true;
-            }
-            if((ZoundPlayerShut[i] != "") && ZoundPlayerShut[i] == sWho)
-            {
-                return true;
-            }
-            break;
-        }
-    }
-    return false;
+    i = FindPlayerSlot(PC);
+    return (i != -1) && SlotMuted(i, sTrig, sWho);
 }
 
 function int GetClientGain(PlayerController PC)
 {
-    local string sNick;
     local int i;
 
     if(PC == none)
     {
         return 0;
     }
-    sNick = PC.PlayerReplicationInfo.PlayerName;
-    for(i = 0; i < 50; i++)
+    i = FindPlayerSlot(PC);
+    if(i == -1)
     {
-        if(ZoundPlayerName[i] == sNick)
-        {
-            return ZoundPlayerGain[i];
-        }
+        return 0;
     }
-    return 0;
+    return ZoundPlayerGain[i];
 }
 
 // Returns the owner-only replicated actor for a player, used to route a zound
-// through the client (where the mute check now happens). Found by owner so it
-// survives respawns; falls back to none (caller then plays server-side).
+// through the client (where the mute check now happens). Found by owner in
+// ZoundSpawns so it survives respawns; falls back to none (caller then plays
+// server-side).
 function WSZoundSpawn GetZoundSpawn(PlayerController PC)
 {
     local WSZoundSpawn ZS;
+    local int i;
 
     if(PC == none)
     {
         return none;
     }
-    foreach DynamicActors(Class'WSZoundSpawn', ZS)
+    for(i = 0; i < ZoundSpawns.Length; i++)
     {
-        if(ZS.Owner == PC)
+        ZS = ZoundSpawns[i];
+        if((ZS != none) && ZS.Owner == PC)
         {
             return ZS;
         }
     }
     return none;
+}
+
+// Called from WSZoundSpawn.Destroyed so ZoundSpawns never holds a destroyed actor.
+function RemoveZoundSpawn(WSZoundSpawn ZS)
+{
+    local int i;
+
+    for(i = 0; i < ZoundSpawns.Length; i++)
+    {
+        if(ZoundSpawns[i] == ZS)
+        {
+            ZoundSpawns.Remove(i, 1);
+            return;
+        }
+    }
 }
 
 // Routes a resolved zound to a player through their client actor so the mute
@@ -615,7 +652,9 @@ function AddToSoundBuff(Sound MySound, int PL, string sTrig, string sNick)
 function BroadcastSound(Sound MySound, optional int iNum, optional string sTrig, optional string FromWho)
 {
     local Controller C;
+    local PlayerController PC;
     local float MyGain;
+    local int S;
 
     if(SoundTime > 0)
     {
@@ -636,38 +675,50 @@ function BroadcastSound(Sound MySound, optional int iNum, optional string sTrig,
     SoundTime = SoundDelay;
     for(C = Level.ControllerList; C != none; C = C.nextController)
     {
-        if(((C != none) && C.IsA('PlayerController')) && !C.PlayerReplicationInfo.bBot)
+        PC = PlayerController(C);
+        if((PC == none) || C.PlayerReplicationInfo.bBot)
         {
-            if(myPlayList.CheckPlayerList(PlayerController(C), false) || CheckZoundAdmin(PlayerController(C)))
+            continue;
+        }
+        if(!myPlayList.CheckPlayerList(PC, false) && !CheckZoundAdmin(PC))
+        {
+            continue;
+        }
+        // One slot lookup instead of CheckForNoZound, CheckMuted and GetMyVolume each
+        // scanning the slots. No slot means: not disabled, not muted, volume 0.
+        S = FindPlayerSlot(PC);
+        MyGain = 0.0000000;
+        if(S != -1)
+        {
+            if(ZoundPlayerKill[S] == 0)
             {
-                if(!CheckForNoZound(PlayerController(C)))
+                continue;
+            }
+            if((sTrig != "") && SlotMuted(S, sTrig, FromWho))
+            {
+                continue;
+            }
+            MyGain = GainToVolume(ZoundPlayerGain[S]);
+        }
+        if(bNoSpecPlayer && iNum == 1)
+        {
+            if(C.PlayerReplicationInfo.bOnlySpectator)
+            {
+                PlayZoundTo(PC, MySound, MyGain, sTrig);
+            }
+        }
+        else
+        {
+            if(bNoSpecPlayer && iNum == 2)
+            {
+                if(!C.PlayerReplicationInfo.bOnlySpectator)
                 {
-                    if(!CheckMuted(PlayerController(C), sTrig, FromWho))
-                    {
-                        MyGain = GetMyVolume(PlayerController(C));
-                        if(bNoSpecPlayer && iNum == 1)
-                        {
-                            if(C.PlayerReplicationInfo.bOnlySpectator)
-                            {
-                                PlayZoundTo(PlayerController(C), MySound, MyGain, sTrig);
-                            }                            
-                        }
-                        else
-                        {
-                            if(bNoSpecPlayer && iNum == 2)
-                            {
-                                if(!C.PlayerReplicationInfo.bOnlySpectator)
-                                {
-                                    PlayZoundTo(PlayerController(C), MySound, MyGain, sTrig);
-                                }                                
-                            }
-                            else
-                            {
-                                PlayZoundTo(PlayerController(C), MySound, MyGain, sTrig);
-                            }
-                        }
-                    }
+                    PlayZoundTo(PC, MySound, MyGain, sTrig);
                 }
+            }
+            else
+            {
+                PlayZoundTo(PC, MySound, MyGain, sTrig);
             }
         }
     }
@@ -675,17 +726,7 @@ function BroadcastSound(Sound MySound, optional int iNum, optional string sTrig,
 
 function float GetMyVolume(PlayerController Sender)
 {
-    local int Gn;
-    local float fVol;
-
-    Gn = GetClientGain(Sender);
-    if(Gn == 0)
-    {
-        return 0.0000000;
-    }
-    fVol = float(Gn);
-    fVol = fVol / float(100);
-    return 2.0000000 * fVol;
+    return GainToVolume(GetClientGain(Sender));
 }
 
 function Sound GetCustomSound(string CustomSound, Controller Sender, bool bInGame, optional bool bDedicated)
@@ -1324,7 +1365,8 @@ function CheckZoundPlayer(PlayerController Sender, string sMesg, optional bool b
 
 function ModifyLogin(out string Portal, out string Options)
 {
-    Log(((GetDateTime(true)) $ " Zound PlayerLogin: ") $ Options, 'Zound');
+    // Name only: the login options also carry ?Password= and any ?AdminPassword=.
+    Log(((GetDateTime(true)) $ " Zound PlayerLogin: ") $ Level.Game.ParseOption(Options, "Name"), 'Zound');
     if(NextMutator != none)
     {
         NextMutator.ModifyLogin(Portal, Options);
@@ -1401,6 +1443,15 @@ function bool CheckZoundAdmin(PlayerController Sender)
     {
         return false;
     }
+    if(Sender.PlayerReplicationInfo.bAdmin)
+    {
+        return true;
+    }
+    // Runs for every receiver of every chat line; usually nobody is a Zound admin.
+    if(NumZoundAdmins == 0)
+    {
+        return false;
+    }
     sTemp = Sender.PlayerReplicationInfo.PlayerName;
     for(i = 0; i < 50; i++)
     {
@@ -1409,42 +1460,45 @@ function bool CheckZoundAdmin(PlayerController Sender)
             return true;
         }
     }
-    if(Sender.PlayerReplicationInfo.bAdmin)
-    {
-        return true;        
-    }
-    else
-    {
-        return false;
-    }
+    return false;
 }
 
+// Keeps NumZoundAdmins equal to the number of non-empty ZoundAdmin slots.
 function AddRemoveZoundAdmin(PlayerController Sender, bool bAdd)
 {
     local string sTemp;
-    local int i;
+    local int i, Free;
 
     if((Sender == none) || Sender.PlayerReplicationInfo == none)
     {
         return;
     }
     sTemp = Sender.PlayerReplicationInfo.PlayerName;
+    if(sTemp == "")
+    {
+        return;
+    }
+    Free = -1;
     for(i = 0; i < 50; i++)
     {
-        if(bAdd)
-        {
-            if((ZoundAdmin[i] == "") || ZoundAdmin[i] == sTemp)
-            {
-                ZoundAdmin[i] = sTemp;
-                return;
-            }
-            continue;
-        }
         if(ZoundAdmin[i] == sTemp)
         {
+            if(bAdd)
+            {
+                return;
+            }
             ZoundAdmin[i] = "";
-            return;
+            NumZoundAdmins--;
         }
+        else if((Free == -1) && ZoundAdmin[i] == "")
+        {
+            Free = i;
+        }
+    }
+    if(bAdd && Free != -1)
+    {
+        ZoundAdmin[Free] = sTemp;
+        NumZoundAdmins++;
     }
 }
 
