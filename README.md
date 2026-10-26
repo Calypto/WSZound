@@ -10,8 +10,8 @@ un-source stripped version of Zound 5.5 with some enhancements
 ## Release notes
 
 V5
-- Exponentially better performance
-- Fix an issue with the chat filter that could hang the server if there were empty entries
+- exponentially better performance
+- fix an issue with the chat filter that would hang the server if there were empty entries
   - The last word of the filter list no longer requires a trailing comma
 
 V4
