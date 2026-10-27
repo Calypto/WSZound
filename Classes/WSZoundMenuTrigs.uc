@@ -1277,9 +1277,7 @@ function SaveClientStuff(bool bBind)
     Class'WSZoundClient'.default.ZoundEnabled = MyZound;
     if(bBind)
     {
-        // Explicit pick: stop auto-moving the key off the player's own binds.
         Class'WSZoundClient'.default.ZoundMenuKey = MyKeyBind;
-        Class'WSZoundClient'.default.bMenuKeyUserSet = true;
     }
     Class'WSZoundClient'.default.ZoundVolume = MyVolume;
     Class'WSZoundClient'.default.bMuteLongZounds = MuteLenBox.IsChecked();

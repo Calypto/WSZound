@@ -15,7 +15,6 @@ var int ZoundMenuKey;
 var int ZoundVolume;
 var bool bMuteLongZounds;
 var float MaxZoundSeconds;
-var bool bMenuKeyUserSet;
 var string KeyBind[125];
 var() array<ZCTriggers> ZoundServer;
 
@@ -26,9 +25,7 @@ var string MesgBind;
 var bool bShowMesg;
 var bool bMesgDone;
 var bool bMyInit;
-var bool bMenuKeyBlocked;
 var float MyTime;
-var string StockEndBind;
 var string MenuCmd;
 
 // The settings object is created with a fixed name, so it always maps to the
@@ -63,7 +60,6 @@ static function LoadZoundConfig()
     default.ZoundVolume = S.ZoundVolume;
     default.bMuteLongZounds = S.bMuteLongZounds;
     default.MaxZoundSeconds = S.MaxZoundSeconds;
-    default.bMenuKeyUserSet = S.bMenuKeyUserSet;
     default.ZoundServer.Length = S.ZoundServer.Length;
     for(i = 0; i < S.ZoundServer.Length; i++)
     {
@@ -83,7 +79,6 @@ static function SaveZoundConfig()
     S.ZoundVolume = default.ZoundVolume;
     S.bMuteLongZounds = default.bMuteLongZounds;
     S.MaxZoundSeconds = default.MaxZoundSeconds;
-    S.bMenuKeyUserSet = default.bMenuKeyUserSet;
     S.ZoundServer.Length = default.ZoundServer.Length;
     for(i = 0; i < default.ZoundServer.Length; i++)
     {
@@ -124,32 +119,13 @@ function bool KeyEvent(out Interactions.EInputKey Key, out Interactions.EInputAc
     }
     else
     {
-        if(((int(Key) == default.ZoundMenuKey) && default.ZoundMenuKey != 0) && !bMenuKeyBlocked)
+        if((int(Key) == default.ZoundMenuKey) && default.ZoundMenuKey != 0)
         {
             PLC.ConsoleCommand("Mutate ZoundMenu");
             return true;
         }
     }
     return false;
-}
-
-// Whatever the player has bound to this key, or "" if it is free. The numbers
-// stored in ZoundMenuKey are EInputKey values, so ask the engine for the key name
-// and then for the alias sitting on it.
-function string GetKeyBinding(int Key)
-{
-    local string KeyName;
-
-    if((Key <= 0) || (ViewportOwner == none) || (ViewportOwner.Actor == none))
-    {
-        return "";
-    }
-    KeyName = ViewportOwner.Actor.ConsoleCommand("KEYNAME" @ string(Key));
-    if(KeyName == "")
-    {
-        return "";
-    }
-    return ViewportOwner.Actor.ConsoleCommand("KEYBINDING" @ KeyName);
 }
 
 function SetMenuKeyMessage()
@@ -161,42 +137,14 @@ function SetMenuKeyMessage()
     {
         sBind = KeyBind[default.ZoundMenuKey];
     }
-    if(bMenuKeyBlocked)
+    if(sBind != "")
     {
-        MesgBind = ((("- " $ sBind) $ " is bound to your own key - set a ZoundMenu key in ") $ MenuCmd) $ " -";
+        MesgBind = ("- ZoundMenu Keybind on " $ sBind) $ " key -";
     }
     else
     {
-        if(sBind != "")
-        {
-            MesgBind = ("- ZoundMenu Keybind on " $ sBind) $ " key -";
-        }
-        else
-        {
-            MesgBind = ("- ZoundMenu has no key - type: " $ MenuCmd) $ " -";
-        }
+        MesgBind = ("- ZoundMenu has no key - type: " $ MenuCmd) $ " -";
     }
-}
-
-// End is still the default menu key, but KeyEvent swallows the press, so claiming
-// it blind kills whatever the player had there. Back off when the key carries a
-// bind of their own - the stock End bind that UT2004 ships with is editor leftovers
-// and does not count. A key picked in the Zound menu (bMenuKeyUserSet) is an
-// explicit choice and always wins.
-function CheckMenuKey()
-{
-    local string Bind;
-
-    bMenuKeyBlocked = false;
-    if(!default.bMenuKeyUserSet && default.ZoundMenuKey != 0)
-    {
-        Bind = GetKeyBinding(default.ZoundMenuKey);
-        if((Bind != "") && !(Bind ~= StockEndBind))
-        {
-            bMenuKeyBlocked = true;
-        }
-    }
-    SetMenuKeyMessage();
 }
 
 function Tick(float Delta)
@@ -206,7 +154,6 @@ function Tick(float Delta)
     {
         bMyInit = true;
         ClientLogon();
-        CheckMenuKey();
     }
     if((MyTime > float(10)) && !bMesgDone)
     {
@@ -409,6 +356,5 @@ defaultproperties
 {
     bVisible=true
     bRequiresTick=true
-    StockEndBind="CenterView|ACTOR ALIGN SNAPTOFLOOR ALIGN=1"
     MenuCmd="mutate zoundmenu"
 }
